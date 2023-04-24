@@ -21,7 +21,7 @@ Handy when you're manually hacking DOR records in a hex editor.
 Takes ROM image files in .63, .62 format and packages them together as a Compressed RAM app.
 Requires the 'lz49' binary from [MPM](https://gitlab.com/b4works/mpm/-/releases) to be in your $path.
 
-Generates app header and concatenates together multiple .lz0,.lz1... files into a single compressed app.
+Generates app header and concatenates together multiple .63, .62 ROM image files or .lz0,.lz1...  app files into a single compressed app.
 
 ![makeapp screenshot](images/makeapp.jpg)
 
