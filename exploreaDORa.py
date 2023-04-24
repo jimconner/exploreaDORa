@@ -4,10 +4,13 @@
 # This tool was written as part of an effort to split apart multi-rom file images back to individual apps to enable
 # obsolete software to be reomved from compilation roms.
 
+
 import glob
 import os
 import struct
 import sys
+from colorama import just_fix_windows_console
+from termcolor import colored
 
 country_codes={
     0 : "USA",
@@ -73,50 +76,49 @@ def read_app_dor(bank, pointer):
     app_dor_length_of_name=rom_image[bank][pointer+46]
     app_dor_name=rom_image[bank][pointer+47:pointer+47+app_dor_length_of_name]
     app_dor_terminator=rom_image[bank][pointer+48+app_dor_length_of_name]
-
-    print(f"DORData: Parent: {EPTxt(app_dor_parent)}, Brother: {EPTxt(app_dor_brother)}, Son: {EPTxt(app_dor_son)}, ", end='')
-    print(f"Type: {hex(app_dor_type)}:{dor_types[app_dor_type]}, Length: {app_dor_length}")
-    print(f"APPInfo({chr(app_dor_key_to_info)}/{app_dor_length_of_info}): Key: []{chr(app_dor_app_letter)}, ", end='')
+    brother_color="green" if app_dor_brother[2] != 0 else "red"
+    print(f"DORData({app_dor_length}): Parent: {EPTxt(app_dor_parent)}, {colored(f'Brother: {EPTxt(app_dor_brother)}', brother_color)}, Son: {EPTxt(app_dor_son)}, ", end='')
+    print(f"Type: {hex(app_dor_type)}:{dor_types[app_dor_type]}")
+    print(f"APPInfo({chr(app_dor_key_to_info)}/{app_dor_length_of_info}): {colored(f'Key: []{chr(app_dor_app_letter)}', 'yellow')}, ", end='')
     print(f"Continuous RAM reqd: {app_dor_continuous_ram*256} bytes, UnsafeWS: {struct.unpack('<H', app_dor_unsafe_workspace)[0]} bytes, ", end='')
     print(f"SafeWS: {struct.unpack('<H', app_dor_safe_workspace)[0]} bytes")
     print(f"  Entry_point: {hex(0x3fff&struct.unpack('<H', app_dor_entry_point)[0])}|{hex(struct.unpack('<H', app_dor_entry_point)[0])}, ", end='')
     print(f"Segment Bindings : 0:{app_dor_sgement0_binding}, 1:{app_dor_sgement1_binding}, 2:{app_dor_sgement2_binding}, 3:{app_dor_sgement3_binding}, ")
-    app_type=[]
+    app_types=[]
     if app_dor_application_type[0] & 1:
-        app_type.append("good")
+        app_types.append("good")
     if app_dor_application_type[0] & 2:
-        app_type.append("bad")
+        app_types.append("bad")
     if app_dor_application_type[0] & 4:
-        app_type.append("ugly")
+        app_types.append("ugly")
     if app_dor_application_type[0] & 8:
-        app_type.append("popdown")
+        app_types.append("popdown")
     if app_dor_application_type[0] & 16:
-        app_type.append("onlyone")
+        app_types.append("onlyone")
     if app_dor_application_type[0] & 32:
-        app_type.append("preserve_screen")
+        app_types.append("preserve_screen")
     if app_dor_application_type[0] & 64:
-        app_type.append("filemanager")
+        app_types.append("filemanager")
     if app_dor_application_type[0] & 128:
-        app_type.append("autoboot")
+        app_types.append("autoboot")
     if app_dor_application_type[1] & 1:
-        app_type.append("capslock")
+        app_types.append("capslock")
     if app_dor_application_type[1] & 2:
-        app_type.append("invcaps")
+        app_types.append("invcaps")
     if app_dor_application_type[1] & 128:
-        app_type.append("ignore_returns")
-    print(f"  App Types: {app_dor_application_type[0]}, {app_dor_application_type[1]} : {app_type}")
+        app_types.append("ignore_returns")
+    print(f"  App Types: {app_types}")
     print(f"HelpData({chr(app_dor_key_to_help)}/{app_dor_length_of_help}), Topics: {EPTxt(app_dor_pointer_to_topics)}, Commands: {EPTxt(app_dor_pointer_to_commands)}, ", end='')
     print(f"Help: {EPTxt(app_dor_pointer_to_app_help)}, TokenBase: {EPTxt(app_dor_pointer_to_token_base)}")
-    print(f"Name({chr(app_dor_key_to_name_section)}/{app_dor_length_of_name}): {app_dor_name[:len(app_dor_name)-1].decode('ascii')}")
+    print(colored(f"Name({chr(app_dor_key_to_name_section)}/{app_dor_length_of_name}): {app_dor_name[:len(app_dor_name)-1].decode('ascii')}", "yellow"))
     #print(f"app_dor_terminator: {app_dor_terminator}")
     print()
     return(app_dor_brother[2], 0x3fff&struct.unpack('<H', app_dor_brother[0:2])[0]) # Brother DOR is the next app in the chain.
 
 
-# Read the card header.
-
 if len(sys.argv) != 2:
     print(f"Usage: {sys.argv[0]} <rom_name>")
+    sys.exit(1)
 
 infile=sys.argv[1]
 dirpath,filename=os.path.split(infile)
@@ -136,45 +138,42 @@ if len(rom_image) < 1:
     print("No ROMS loaded. Exiting.")
     sys.exit(1)
 
-top_bank=max(rom_image.keys())
-
-card_id=rom_image[top_bank][0x3ff8:0x3ffa]
-country_code=rom_image[top_bank][0x3ffa]&15
-external_application=rom_image[top_bank][0x3ffb]
-size_in_banks=rom_image[top_bank][0x3ffc]
-card_subtype=rom_image[top_bank][0x3ffd]
-card_type=rom_image[top_bank][0x3ffe:0x4000]
+# Read the card header. It is always in bank 63.
+card_id=rom_image[63][0x3ff8:0x3ffa]
+country_code=rom_image[63][0x3ffa]&15
+external_application=rom_image[63][0x3ffb]
+size_in_banks=rom_image[63][0x3ffc]
+card_subtype=rom_image[63][0x3ffd]
+card_type=rom_image[63][0x3ffe:0x4000]
 
 print()
-print(f"Card Type: {card_type.decode('utf-8')}, Subtype: {hex(card_subtype)}, Card Size (banks): {int(size_in_banks)}")
+print(colored(f"Card Type: {card_type.decode('utf-8')}, Subtype: {hex(card_subtype)}, Card Size (16KB banks): {int(size_in_banks)}", "cyan"))
 print(f"External Application: {external_application}, Country_Code: {hex(country_code)}, ({country_codes[country_code]}), Card ID: {card_id.hex()}")
-
-
 
 
 # Read the application Front DOR which always starts at 0x3fc0
 # This points us to the first Application DOR with the pointer_to_son
-pointer_to_parent=rom_image[top_bank][0x3fc0:0x3fc3]
-pointer_to_brother=rom_image[top_bank][0x3fc3:0x3fc6]
-pointer_to_son=rom_image[top_bank][0x3fc6:0x3fc9]
-dor_type=rom_image[top_bank][0x3fc9]
-dor_length=rom_image[top_bank][0x3fca]
-key_for_name_filed=rom_image[top_bank][0x3fcb]
-length_of_name=rom_image[top_bank][0x3fcc]
-name_bytes=rom_image[top_bank][0x3fcd:0x3fd2]
-dor_terminator=rom_image[top_bank][0x3fd2]
+pointer_to_parent=rom_image[63][0x3fc0:0x3fc3]
+pointer_to_brother=rom_image[63][0x3fc3:0x3fc6]
+pointer_to_son=rom_image[63][0x3fc6:0x3fc9]
+dor_type=rom_image[63][0x3fc9]
+dor_length=rom_image[63][0x3fca]
+key_for_name_filed=rom_image[63][0x3fcb]
+length_of_name=rom_image[63][0x3fcc]
+name_bytes=rom_image[63][0x3fcd:0x3fd2]
+dor_terminator=rom_image[63][0x3fd2]
 
 print()
-print(f"Front DOR Data")
-print(f"DORData: Parent: {EPTxt(pointer_to_parent)}, Brother: {EPTxt(pointer_to_brother)}, Son: {EPTxt(pointer_to_son)} Type: {hex(dor_type)}:{dor_types[dor_type]}, Length: {dor_length}")
-print(f"Name({chr(key_for_name_filed)}/{length_of_name}): {name_bytes[:len(name_bytes)-1]}")
+print(colored(f"Front DOR Data @ 63:0x3fc0", "green"))
+print(f"DORData({dor_length}): Parent: {EPTxt(pointer_to_parent)}, Brother: {EPTxt(pointer_to_brother)}, {colored(f'Son: {EPTxt(pointer_to_son)}', 'green')}, Type: {hex(dor_type)}:{dor_types[dor_type]}")
+print(colored(f"Name({chr(key_for_name_filed)}/{length_of_name}): {name_bytes[:len(name_bytes)-1]}", "yellow"))
 print()
 
 
-print(f"First App DOR at {pointer_to_son[2]}:{0x3fff&struct.unpack('<H', pointer_to_son[0:2])[0]}")
+print(colored(f"First App DOR at {pointer_to_son[2]}, {hex(0x3fff&struct.unpack('<H', pointer_to_son[0:2])[0])}", "green"))
 next_bank, next_pointer=read_app_dor(pointer_to_son[2], 0x3fff&struct.unpack('<H', pointer_to_son[0:2])[0])
 while next_bank != 0:
-    print(f"Following DOR at {next_bank}:{hex(next_pointer)}")
+    print(colored(f"Following DOR at {next_bank}:{hex(next_pointer)}", "green"))
     next_bank, next_pointer=read_app_dor(next_bank, next_pointer)
 
 
