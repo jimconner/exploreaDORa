@@ -36,7 +36,7 @@ for file in romfiles:
     name, suffix=file.split('.')
     filenum=suffix[suffix_offset:]
     status,output = subprocess.getstatusoutput(f'lz49 -v -i {file} -o {name}.lz{filenum}')
-print(output)
+    print(output)
 
 lzfiles=glob.glob(f"{dirpath}/{prefix}.lz*")
 
